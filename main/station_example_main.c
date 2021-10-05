@@ -388,10 +388,9 @@ static int8_t getImage(char* imgName)
 }
 
 
-
-static void http_test_task(void *pvParameters){
-    TFT_t dev;
-	spi_master_init(&dev, CONFIG_MOSI_GPIO, CONFIG_SCLK_GPIO, CONFIG_CS_GPIO, CONFIG_DC_GPIO, CONFIG_RESET_GPIO, CONFIG_BL_GPIO);
+static void initTft(TFT_t * pdev){
+    
+	spi_master_init(pdev, CONFIG_MOSI_GPIO, CONFIG_SCLK_GPIO, CONFIG_CS_GPIO, CONFIG_DC_GPIO, CONFIG_RESET_GPIO, CONFIG_BL_GPIO);
 
     #if CONFIG_ILI9225
         uint16_t model = 0x9225;
@@ -411,7 +410,14 @@ static void http_test_task(void *pvParameters){
     #if CONFIG_ST7796
         uint16_t model = 0x7796;
     #endif
-	lcdInit(&dev, model, CONFIG_WIDTH, CONFIG_HEIGHT, CONFIG_OFFSETX, CONFIG_OFFSETY);
+	lcdInit(pdev, model, CONFIG_WIDTH, CONFIG_HEIGHT, CONFIG_OFFSETX, CONFIG_OFFSETY);
+    
+}
+
+static void http_test_task(void *pvParameters){
+    TFT_t dev ;
+    initTft(&dev);
+    
     int8_t ret = getImage("STTE52.png");
     
     if ( ret== 0) {
