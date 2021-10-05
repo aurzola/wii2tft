@@ -30,6 +30,17 @@
 #include "decode_png.h"
 #include "pngle.h"
 
+#include "driver/i2c.h"
+
+#define ESP_SLAVE_ADDR CONFIG_I2C_SLAVE_ADDRESS
+#define _I2C_NUMBER(num) I2C_NUM_##num
+#define I2C_NUMBER(num) _I2C_NUMBER(num)
+#define DATA_LENGTH 32                  /*!< Data buffer length (GAMEID) */
+#define I2C_SLAVE_SCL_IO CONFIG_I2C_SLAVE_SCL               /*!< gpio number for i2c slave clock */
+#define I2C_SLAVE_SDA_IO CONFIG_I2C_SLAVE_SDA               /*!< gpio number for i2c slave data */
+#define I2C_SLAVE_NUM I2C_NUMBER(CONFIG_I2C_SLAVE_PORT_NUM) /*!< I2C port number for slave dev */
+#define I2C_SLAVE_TX_BUF_LEN (2 * DATA_LENGTH)              /*!< I2C slave tx buffer size */
+#define I2C_SLAVE_RX_BUF_LEN (2 * DATA_LENGTH)              /*!< I2C slave rx buffer size */
 
 #define MAX_HTTP_RECV_BUFFER 1024
 /* The examples use WiFi configuration that you can set via project configuration menu
@@ -414,10 +425,66 @@ static void initTft(TFT_t * pdev){
     
 }
 
+
+static esp_err_t i2c_slave_init(void)
+{
+    int i2c_slave_port = I2C_SLAVE_NUM;
+    i2c_config_t conf_slave = {
+        .sda_io_num = I2C_SLAVE_SDA_IO,
+        .sda_pullup_en = GPIO_PULLUP_ENABLE,
+        .scl_io_num = I2C_SLAVE_SCL_IO,
+        .scl_pullup_en = GPIO_PULLUP_ENABLE,
+        .mode = I2C_MODE_SLAVE,
+        .slave.addr_10bit_en = 0,
+        .slave.slave_addr = ESP_SLAVE_ADDR,
+    };
+    esp_err_t err = i2c_param_config(i2c_slave_port, &conf_slave);
+    if (err != ESP_OK) {
+        return err;
+    }
+    return i2c_driver_install(i2c_slave_port, conf_slave.mode, I2C_SLAVE_RX_BUF_LEN, I2C_SLAVE_TX_BUF_LEN, 0);
+}
+
+static void disp_buf(uint8_t *buf, int len)
+{
+    int i;
+    for (i = 0; i < len; i++) {
+        printf("%c", buf[i]);
+    }
+    printf("\n");
+}
+
+static int getID(uint8_t *buf, int len)
+{
+    printf("---- Slave read: [%d] bytes ----\n", len);
+    printf("---- Trying to get an ID in ----\n");
+    disp_buf(buf, len);	
+    
+    uint8_t *p1=NULL, *p2=NULL;
+    int found = 0;
+    for (int i = len; i >= 0; i--) {
+        if( buf[i] =='[' ) {
+            p1=&buf[i+1];
+            if ( p2 )
+                break;
+        }
+	        
+        if( buf[i] == ']') {
+            p2=&buf[i];	
+        }
+    }
+    if ( p1 && p2 && ( p2 > p1 ) ) {
+    	memcpy(buf,p1,p2-p1);
+        buf[p2-p1] ='\0';
+        found=1;
+    }
+    return found;
+}
+
 static void http_test_task(void *pvParameters){
     TFT_t dev ;
     initTft(&dev);
-    
+
     int8_t ret = getImage("STTE52.png");
     
     if ( ret== 0) {
@@ -437,7 +504,7 @@ void app_main(void)
     esp_vfs_spiffs_conf_t conf = {
             .base_path = "/spiffs",
             .partition_label = NULL,
-            .max_files = 16,
+            .max_files = 24,
             .format_if_mount_failed =true
     };
 

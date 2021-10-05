@@ -131,8 +131,8 @@ CONFIG_PARTITION_TABLE_MD5=y
 #
 # Wifi Configuration
 #
-CONFIG_ESP_WIFI_SSID="Comer 1"
-CONFIG_ESP_WIFI_PASSWORD="Cambiala64"
+CONFIG_ESP_WIFI_SSID="aur_tp_link"
+CONFIG_ESP_WIFI_PASSWORD="t1c0m.sa"
 CONFIG_ESP_MAXIMUM_RETRY=5
 # end of Wifi Configuration
 
@@ -158,6 +158,15 @@ CONFIG_BL_GPIO=32
 # CONFIG_INVERSION is not set
 # CONFIG_RGB_COLOR is not set
 # end of TFT Configuration
+
+#
+# I2C Slave
+#
+CONFIG_I2C_SLAVE_SCL=5
+CONFIG_I2C_SLAVE_SDA=4
+CONFIG_I2C_SLAVE_PORT_NUM=0
+CONFIG_I2C_SLAVE_ADDRESS=0x28
+# end of I2C Slave
 
 #
 # Compiler options
