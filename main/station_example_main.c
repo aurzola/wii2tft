@@ -323,37 +323,50 @@ TickType_t PNGTest(TFT_t * dev, char * file, int width, int height) {
 } 
 
 
-static void getImage(void)
+static int8_t getImage(char* imgName)
 {
+
+    char path[32]="/spiffs/";
+    
+    FILE* fp = fopen( strcat(path, imgName) , "rb");
+    if (fp != NULL) {
+        fclose(fp);
+        ESP_LOGI(TAG,"Image Found in spiffs!");
+        return 0;
+    } 
+
     char *buffer = malloc(MAX_HTTP_RECV_BUFFER + 1);
     if (buffer == NULL) {
         ESP_LOGE(TAG, "Cannot malloc http receive buffer");
-        return;
+        return -1;
     }
+    char url[64] = "http://art.gametdb.com/wii/cover/US/";
+    strcat(url, imgName);
+
     esp_http_client_config_t config = {
-        .url = "http://art.gametdb.com/wii/cover/EN/RZPP01.png",
+        .url = url,   // "http://art.gametdb.com/wii/cover/US/RZPP01.png",
     };
     esp_http_client_handle_t client = esp_http_client_init(&config);
     esp_err_t err;
     if ((err = esp_http_client_open(client, 0)) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to open HTTP connection: %s", esp_err_to_name(err));
         free(buffer);
-        return;
+        return -1;
     }
     int content_length =  esp_http_client_fetch_headers(client);
     int total_read_len = 0, read_len;
-    ESP_LOGI(TAG, "Opening file");
-    char file[32];
-    strcpy(file, "/spiffs/GMSK01.png");
-    FILE* fd = fopen(file, "wb");
+    ESP_LOGI(TAG, "Opening file for writting");
+    
+    FILE* fd = fopen( path, "wb");
     if (fd == NULL) {
         ESP_LOGE(TAG, "Failed to open file for writing");
-        return;
+        return -1;
     }
 
     while ( (read_len = esp_http_client_read(client, buffer, MAX_HTTP_RECV_BUFFER) ) ){
         if (read_len <= 0) {
             ESP_LOGE(TAG, "Error read data");
+             return -1;
         }
         else {
             //ESP_LOG_BUFFER_HEX(TAG, buffer, read_len);
@@ -370,9 +383,14 @@ static void getImage(void)
     esp_http_client_close(client);
     esp_http_client_cleanup(client);
     free(buffer);
+    ESP_LOGI(TAG,"Image Stored in spiffs!");
+    return 0;
+}
 
 
-	TFT_t dev;
+
+static void http_test_task(void *pvParameters){
+    TFT_t dev;
 	spi_master_init(&dev, CONFIG_MOSI_GPIO, CONFIG_SCLK_GPIO, CONFIG_CS_GPIO, CONFIG_DC_GPIO, CONFIG_RESET_GPIO, CONFIG_BL_GPIO);
 
     #if CONFIG_ILI9225
@@ -394,13 +412,13 @@ static void getImage(void)
         uint16_t model = 0x7796;
     #endif
 	lcdInit(&dev, model, CONFIG_WIDTH, CONFIG_HEIGHT, CONFIG_OFFSETX, CONFIG_OFFSETY);
+    int8_t ret = getImage("STTE52.png");
     
-	PNGTest(&dev, file, CONFIG_WIDTH, CONFIG_HEIGHT);
-	
-}
-
-static void http_test_task(void *pvParameters){
-    getImage();
+    if ( ret== 0) {
+        char path[32]="/spiffs/";
+        strcat(path, "STTE52.png");
+        PNGTest(&dev, path, CONFIG_WIDTH, CONFIG_HEIGHT);
+    }
     ESP_LOGE(TAG, "About to end Task...");
     vTaskDelete(NULL);
 }
