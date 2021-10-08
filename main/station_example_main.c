@@ -35,7 +35,7 @@
 #define ESP_SLAVE_ADDR CONFIG_I2C_SLAVE_ADDRESS
 #define _I2C_NUMBER(num) I2C_NUM_##num
 #define I2C_NUMBER(num) _I2C_NUMBER(num)
-#define DATA_LENGTH 32                  /*!< Data buffer length (GAMEID) */
+#define DATA_LENGTH 64                  /*!< Data buffer length (GAMEID) */
 #define I2C_SLAVE_SCL_IO CONFIG_I2C_SLAVE_SCL               /*!< gpio number for i2c slave clock */
 #define I2C_SLAVE_SDA_IO CONFIG_I2C_SLAVE_SDA               /*!< gpio number for i2c slave data */
 #define I2C_SLAVE_NUM I2C_NUMBER(CONFIG_I2C_SLAVE_PORT_NUM) /*!< I2C port number for slave dev */
@@ -370,7 +370,7 @@ static int8_t getImage(char* imgName)
     
     FILE* fd = fopen( path, "wb");
     if (fd == NULL) {
-        ESP_LOGE(TAG, "Failed to open file for writing");
+        ESP_LOGE(TAG, "Failed to open file for writing (%s)", path);
         return -1;
     }
 
@@ -394,7 +394,7 @@ static int8_t getImage(char* imgName)
     esp_http_client_close(client);
     esp_http_client_cleanup(client);
     free(buffer);
-    ESP_LOGI(TAG,"Image Stored in spiffs!");
+    ESP_LOGI(TAG,"Image %s Stored in spiffs!", imgName);
     return 0;
 }
 
@@ -481,20 +481,44 @@ static int getID(uint8_t *buf, int len)
     return found;
 }
 
-static void http_test_task(void *pvParameters){
-    TFT_t dev ;
-    initTft(&dev);
+static void showImage(char * imgName , TFT_t * pdev){
 
-    int8_t ret = getImage("STTE52.png");
+    int8_t ret = getImage(imgName);
     
     if ( ret== 0) {
         char path[32]="/spiffs/";
-        strcat(path, "STTE52.png");
-        PNGTest(&dev, path, CONFIG_WIDTH, CONFIG_HEIGHT);
+        strcat(path, imgName);
+        PNGTest(pdev, path, CONFIG_WIDTH, CONFIG_HEIGHT);
     }
-    ESP_LOGE(TAG, "About to end Task...");
+    
+}
+
+
+static void i2c_task(void *pvParameters){
+    uint8_t *data = (uint8_t *)malloc(DATA_LENGTH);
+    ESP_ERROR_CHECK(i2c_slave_init());
+    TFT_t dev ;
+    initTft(&dev);
+
+    ESP_LOGE(TAG, "i2cSlave task");
+    while (1) {
+        
+        int size = i2c_slave_read_buffer(I2C_SLAVE_NUM, data, DATA_LENGTH, 1000 / portTICK_RATE_MS);
+        if ( size > 0 ) {
+	        if ( getID(data,size) == 1 ) {  
+	             ESP_LOGE(TAG, "Got GID: %s", data);
+                 showImage((char *) data, &dev);
+            }
+            else
+                ESP_LOGE(TAG, "!NOGID");
+           
+        }
+        vTaskDelay(5000 / portTICK_PERIOD_MS);
+    } 
     vTaskDelete(NULL);
 }
+
+
 
 void app_main(void)
 {
@@ -542,5 +566,5 @@ void app_main(void)
 
     ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
     wifi_init_sta();
-    xTaskCreate(&http_test_task, "http_test_task", 8192, NULL, 5, NULL);
+    xTaskCreate(&i2c_task, "i2c_task", 8192, NULL, 5, NULL);
 }
